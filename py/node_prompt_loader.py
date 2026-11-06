@@ -63,8 +63,10 @@ def split_entries(text, sep_mode="空行", custom_sep="",
     if skip_comments:
         kept = []
         for line in text.split("\n"):
-            # 只跳过「整行」注释；行内的 # 不动（提示词里可能有 # 号）
+            # 整行注释：替换成空行，而不是直接删掉 —— 这样它天然充当分隔，
+            # 不会把注释行上下两条提示词粘成一条
             if line.lstrip().startswith(COMMENT_PREFIX):
+                kept.append("")
                 continue
             kept.append(line)
         text = "\n".join(kept)
