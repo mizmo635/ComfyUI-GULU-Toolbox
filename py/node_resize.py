@@ -102,7 +102,7 @@ class ImageEdgeResizeCN:
                 out_tensor = torch.stack(outs, dim=0)
             except Exception:
                 # 批量里尺寸不一致时无法合成一个张量，只往下传第一张
-                print("[YSQ工具箱] 按边压缩：批量内图像尺寸不一致，只输出第一张")
+                print("[GULU工具箱] 按边压缩：批量内图像尺寸不一致，只输出第一张")
                 out_tensor = outs[0].unsqueeze(0)
         else:
             out_tensor = outs[0].unsqueeze(0)
@@ -110,13 +110,13 @@ class ImageEdgeResizeCN:
         n = len(image)
         state = "已缩放" if scaled_any else "未缩放(原图未超过目标边长)"
         print(
-            f"[YSQ工具箱] 按边压缩：{src_size[0]}×{src_size[1]} -> {out_w}×{out_h}"
+            f"[GULU工具箱] 按边压缩：{src_size[0]}×{src_size[1]} -> {out_w}×{out_h}"
             f" | {state} | 基准{基准边} {目标边长} | 对齐 {对齐倍数} | {n} 张"
         )
 
         return {
             "ui": {
-                "ysq_resize": [{
+                "gulu_resize": [{
                     "width": int(out_w),
                     "height": int(out_h),
                     "src_width": src_size[0],

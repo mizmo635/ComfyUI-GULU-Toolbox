@@ -179,7 +179,7 @@ function itpBuildSizePanel(node) {
   wrap.appendChild(big);
   wrap.appendChild(sub);
 
-  const widget = node.addDOMWidget("计算结果", "ysq_size", wrap, {
+  const widget = node.addDOMWidget("计算结果", "gulu_size", wrap, {
     serialize: false,
     hideOnZoom: false,
   });
@@ -187,13 +187,13 @@ function itpBuildSizePanel(node) {
     return [Math.max(120, width || 240), ITP_SIZE_PANEL_H];
   };
 
-  node.__ysqSizeUI = { big, sub };
+  node.__guluSizeUI = { big, sub };
 }
 
 function itpUpdateSizePanel(node, message) {
-  const ui = node.__ysqSizeUI;
+  const ui = node.__guluSizeUI;
   if (!ui) return;
-  const list = message && message.ysq_resize;
+  const list = message && message.gulu_resize;
   const item = Array.isArray(list) ? list[0] : null;
   if (!item) return;
 
@@ -262,7 +262,7 @@ function itpBuildLoaderPanel(node) {
   wrap.appendChild(frame);
   wrap.appendChild(info);
 
-  const widget = node.addDOMWidget("预览与信息", "ysq_loader_panel", wrap, {
+  const widget = node.addDOMWidget("预览与信息", "gulu_loader_panel", wrap, {
     serialize: false,
     hideOnZoom: false,
   });
@@ -271,16 +271,16 @@ function itpBuildLoaderPanel(node) {
   };
 
   frame.addEventListener("click", () => {
-    if (node.__ysqUrl) window.open(node.__ysqUrl, "_blank");
+    if (node.__guluUrl) window.open(node.__guluUrl, "_blank");
   });
 
-  node.__ysqLoaderUI = { img, hint, l1, l2 };
+  node.__guluLoaderUI = { img, hint, l1, l2 };
 }
 
 function itpUpdateLoaderPanel(node, message) {
-  const ui = node.__ysqLoaderUI;
+  const ui = node.__guluLoaderUI;
   if (!ui) return;
-  const list = message && message.ysq_show;
+  const list = message && message.gulu_show;
   const item = Array.isArray(list) ? list[0] : null;
   if (!item) return;
 
@@ -290,7 +290,7 @@ function itpUpdateLoaderPanel(node, message) {
     ui.img.src = base + "&_=" + Date.now();     // 加时间戳，避免浏览器拿缓存旧图
     ui.img.style.display = "block";
     ui.hint.style.display = "none";
-    node.__ysqUrl = base;
+    node.__guluUrl = base;
   }
 
   ui.l1.textContent = `${item.width} × ${item.height}`;
@@ -422,7 +422,7 @@ function itpBuildLoraEditor(node) {
   wrap.appendChild(bulkBox);
   wrap.appendChild(rowsBox);
 
-  const widget = node.addDOMWidget("LoRA面板", "ysq_lora_editor", wrap, {
+  const widget = node.addDOMWidget("LoRA面板", "gulu_lora_editor", wrap, {
     serialize: false,
     hideOnZoom: false,
   });
@@ -516,7 +516,7 @@ function itpBuildLoraEditor(node) {
     qInput.value = "";
     toggleBulk(false);
     render();
-    console.log(`[YSQ工具箱] 批量添加了 ${added} 个 LoRA`);
+    console.log(`[GULU工具箱] 批量添加了 ${added} 个 LoRA`);
   });
 
   function render() {
@@ -607,7 +607,7 @@ function itpBuildLoraEditor(node) {
     render();
   });
 
-  node.__ysqLoraEditor = { items, render };
+  node.__guluLoraEditor = { items, render };
 
   setTimeout(() => { render(); itpFit(node); itpDirty(node); }, 0);
 }
@@ -635,7 +635,7 @@ function itpBuildLoraPanel(node) {
   wrap.appendChild(l1);
   wrap.appendChild(l2);
 
-  const widget = node.addDOMWidget("轮转进度", "ysq_lora_panel", wrap, {
+  const widget = node.addDOMWidget("轮转进度", "gulu_lora_panel", wrap, {
     serialize: false,
     hideOnZoom: false,
   });
@@ -643,13 +643,13 @@ function itpBuildLoraPanel(node) {
     return [Math.max(140, width || 240), ITP_LORA_PANEL_H];
   };
 
-  node.__ysqLoraUI = { l1, l2 };
+  node.__guluLoraUI = { l1, l2 };
 }
 
 function itpUpdateLoraPanel(node, message) {
-  const ui = node.__ysqLoraUI;
+  const ui = node.__guluLoraUI;
   if (!ui) return;
-  const list = message && message.ysq_show;
+  const list = message && message.gulu_show;
   const item = Array.isArray(list) ? list[0] : null;
   if (!item) return;
 
@@ -713,12 +713,12 @@ function itpWrapQueue(app) {
   const orig = app.queuePrompt;
   app.queuePrompt = function () {
     try {
-      if (!window.__ysqAutoQueue) {
+      if (!window.__guluAutoQueue) {
         ITP_LOOP_PENDING = null;
         for (const n of itpLoopNodes(app)) itpSetLoopIndex(n, 0);
       }
     } catch (e) { /* 忽略 */ }
-    window.__ysqAutoQueue = false;
+    window.__guluAutoQueue = false;
     return orig.apply(this, arguments);
   };
 }
@@ -731,23 +731,23 @@ function itpAdvance(app, nodeId, info) {
   if (!info.more) {
     itpSetLoopIndex(node, 0);          // 本批跑完，复位
     itpDirty(node);
-    console.log("[YSQ工具箱] 批量导入完成：共 " + info.total + " 张");
+    console.log("[GULU工具箱] 批量导入完成：共 " + info.total + " 张");
     return;
   }
 
   // next 优先用后端给的；万一是老版本没有这个字段，就用 index + 1 兜底
   const nextIdx = (typeof info.next === "number") ? info.next : (Number(info.index) + 1);
-  console.log(`[YSQ工具箱] 第 ${info.index + 1}/${info.total} 张已跑完，继续下一张（→ ${nextIdx}）`);
+  console.log(`[GULU工具箱] 第 ${info.index + 1}/${info.total} 张已跑完，继续下一张（→ ${nextIdx}）`);
   itpSetLoopIndex(node, nextIdx);
   itpDirty(node);
-  window.__ysqAutoQueue = true;
+  window.__guluAutoQueue = true;
   setTimeout(() => {
     try {
       const p = app.queuePrompt(0, 1);
       if (p && typeof p.catch === "function") p.catch(() => {});
     } catch (e) {
-      window.__ysqAutoQueue = false;
-      console.warn("[YSQ工具箱] 自动循环中断：", e);
+      window.__guluAutoQueue = false;
+      console.warn("[GULU工具箱] 自动循环中断：", e);
     }
   }, 120);
 }
@@ -762,7 +762,7 @@ function itpHookLoopEvents(app) {
   api.addEventListener("executed", (e) => {
     const d = e && e.detail;
     if (!d || !d.output) return;
-    const list = d.output.ysq_show;
+    const list = d.output.gulu_show;
     const info = Array.isArray(list) ? list[0] : null;
     if (!info) return;
     // 图片加载器的「一次模式」不循环；姿势变体循环没有 mode 字段，默认就循环
@@ -794,7 +794,7 @@ function itpHookLoopEvents(app) {
 
 if (ITP_APP && typeof ITP_APP.registerExtension === "function") {
   ITP_APP.registerExtension({
-    name: "YSQToolbox.WidgetVisibility",
+    name: "GULUToolbox.WidgetVisibility",
 
     beforeRegisterNodeDef(nodeType, nodeData) {
       const conf = nodeData ? ITP_NODES[nodeData.name] : null;
@@ -837,7 +837,7 @@ if (ITP_APP && typeof ITP_APP.registerExtension === "function") {
           itpRefresh(node, rules);
           setTimeout(() => { itpRefresh(node, rules); itpFit(node); itpDirty(node); }, 0);
         } catch (e) {
-          console.warn("[YSQ工具箱] 界面初始化失败（节点功能不受影响）：", e);
+          console.warn("[GULU工具箱] 界面初始化失败（节点功能不受影响）：", e);
         }
         return r;
       };
@@ -852,7 +852,7 @@ if (ITP_APP && typeof ITP_APP.registerExtension === "function") {
             if (conf.panel === "loader") itpUpdateLoaderPanel(this, message);
             if (conf.panel === "lora") itpUpdateLoraPanel(this, message);
           } catch (e) {
-            console.warn("[YSQ工具箱] 尺寸面板更新失败：", e);
+            console.warn("[GULU工具箱] 尺寸面板更新失败：", e);
           }
           return r;
         };
@@ -877,5 +877,5 @@ if (ITP_APP && typeof ITP_APP.registerExtension === "function") {
     },
   });
 } else {
-  console.warn("[YSQ工具箱] 未取得 ComfyUI 前端 app，跳过界面联动（节点功能不受影响）");
+  console.warn("[GULU工具箱] 未取得 ComfyUI 前端 app，跳过界面联动（节点功能不受影响）");
 }

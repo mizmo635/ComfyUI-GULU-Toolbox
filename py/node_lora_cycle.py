@@ -137,7 +137,7 @@ def resolve_lora(name):
     if len(hits) == 1:
         return hits[0]
     if len(hits) > 1:
-        print(f"[YSQ工具箱] LoRA「{name}」匹配到多个，用第一个：{hits[0]}（候选：{', '.join(hits[:4])}）")
+        print(f"[GULU工具箱] LoRA「{name}」匹配到多个，用第一个：{hits[0]}（候选：{', '.join(hits[:4])}）")
         return hits[0]
 
     raise ValueError(
@@ -211,7 +211,7 @@ class LoRACycleCN:
         total = len(enabled)
         idx = int(循环位置 or 0)
         if idx < 0 or idx >= total:
-            print(f"[YSQ工具箱] LoRA 轮转位置 {idx} 超出启用数 {total}，回到第一个")
+            print(f"[GULU工具箱] LoRA 轮转位置 {idx} 超出启用数 {total}，回到第一个")
             idx = 0
 
         name, _on, strength = enabled[idx]
@@ -226,11 +226,11 @@ class LoRACycleCN:
         )
 
         more = idx + 1 < total
-        print(f"[YSQ工具箱] LoRA 轮转 {idx + 1}/{total}：{resolved}  强度 {strength}"
+        print(f"[GULU工具箱] LoRA 轮转 {idx + 1}/{total}：{resolved}  强度 {strength}"
               f"  {'→ 自动继续下一个' if more else '→ 全部完成'}")
 
         return {
-            "ui": {"ysq_show": [{
+            "ui": {"gulu_show": [{
                 "mode": "loop",
                 "index": idx,
                 "total": total,

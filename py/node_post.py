@@ -15,7 +15,8 @@ import folder_paths
 import torch
 
 from .core import (
-    CATEGORY, FORMATS, IMAGE_EXTS, SAVE_MODES, SAVE_SWITCH, WM_POSITIONS, WM_SOURCES,
+    CATEGORY, FORMATS, IMAGE_EXTS, PNG_META_MODES, SAVE_MODES, SAVE_SWITCH, TEXT_META_KEY,
+    WM_POSITIONS, WM_SOURCES,
     apply_watermark, encode_image, ext_of, human_size, limit_long_edge, list_watermark_files,
     load_watermark, pil_to_tensor, resolve_save_dir, tensor_to_pil, timed_filepath,
 )
@@ -92,9 +93,10 @@ class ImagePostExportCN:
                     "default": 6, "min": 0, "max": 9, "step": 1, "display": "slider",
                     "tooltip": "仅保存格式为 PNG 时生效。0 最快但文件最大，9 最慢但文件最小；PNG 压缩是无损的，画面完全不变。",
                 }),
-                "PNG写入工作流": (["写入", "不写入"], {
+                "PNG写入工作流": (PNG_META_MODES, {
                     "default": "写入",
-                    "tooltip": "仅保存格式为 PNG 时生效。写入后把图片拖回 ComfyUI 就能还原整条工作流（与官方保存节点一致）。",
+                    "tooltip": "仅保存格式为 PNG 时生效。写入：把完整工作流写进图片，拖回 ComfyUI 能还原整条链路（与官方保存节点一致）。"
+                               "不写入：不写任何元数据。只写提示词：只把 text 端口接进来的文字写进图片，不写工作流 JSON（体积更小）。",
                 }),
                 "最长边限制": ("INT", {
                     "default": 0, "min": 0, "max": 16384, "step": 64,
@@ -168,6 +170,13 @@ class ImagePostExportCN:
                 "watermark": ("IMAGE", {
                     "tooltip": "水印来源选「接入图像端口」时，从这里接水印图（支持上游节点生成的图）。带透明通道的图最好。",
                 }),
+                "text": ("STRING", {
+                    "default": "",
+                    "multiline": False,
+                    "tooltip": "要写进图片里的文本（提示词等）。可以从上游文本节点接进来，也可以直接手填。"
+                               "节点一定等这一轮的 image 真正到齐后才执行，所以文字先到还是图片先到都不会写错轮次；"
+                               "留空 = 不写文本。配合下面的「PNG写入工作流 = 只写提示词」可以只存提示词、不存整条工作流。",
+                }),
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -201,7 +210,7 @@ class ImagePostExportCN:
             水印来源, 水印文件, 水印位置, 水印宽度, 不透明度, 旋转角度,
             水印边距X, 水印边距Y, 水印间距,
             保存位置, 子文件夹, 自定义路径, 文件名前缀, 落盘开关,
-            watermark=None, prompt=None, extra_pnginfo=None):
+            watermark=None, text=None, prompt=None, extra_pnginfo=None):
 
         if image is None or len(image) == 0:
             raise ValueError("没有输入图像")
@@ -215,10 +224,25 @@ class ImagePostExportCN:
 
         wm, wm_note = self._resolve_watermark(水印来源, 水印文件, watermark)
 
+        # ---------------- 文字：只在本轮图像真的到齐后才写 ----------------
+        # 时序说明：ComfyUI 是依赖驱动的，节点必须等 image（以及已接线的 text）
+        # 全部就绪才会被调用一次；批量导入循环里每一轮同样是「一次完整调用」，
+        # 所以这里拿到的 text 必然是当前这一轮的值 —— 文字先到或图片先到都不会串轮。
+        txt = str(text or "").strip()
+
         # 元数据只整理一次
         meta = {}
-        if fmt == "PNG" and PNG写入工作流 == "写入":
-            meta = build_meta(prompt, extra_pnginfo)
+        if fmt == "PNG":
+            if PNG写入工作流 == "写入":
+                meta = build_meta(prompt, extra_pnginfo)
+                if txt:
+                    meta[TEXT_META_KEY] = txt
+            elif PNG写入工作流 == "只写提示词":
+                if txt:
+                    meta = {TEXT_META_KEY: txt}
+        elif txt:
+            # JPG 没有工作流开关：接了文字就直接写进 COM 注释段
+            meta = {TEXT_META_KEY: txt}
 
         # 保存目录（仅保存时才需要）
         do_save = 落盘开关 == "保存"
@@ -291,8 +315,15 @@ class ImagePostExportCN:
             log_lines.append(f"已保存到：{save_dir}")
         else:
             log_lines.append("未写入文件（只输出处理后的图像）")
+
+        if TEXT_META_KEY in meta:
+            log_lines.append(f"已嵌入提示词：{len(txt)} 字（键名 {TEXT_META_KEY}）")
+        elif fmt == "PNG" and PNG写入工作流 == "只写提示词":
+            log_lines.append("只写提示词：text 输入是空的，本次没有写入任何元数据")
+        elif txt and fmt == "PNG" and PNG写入工作流 == "不写入":
+            log_lines.append("提示词未嵌入（PNG写入工作流 = 不写入）")
         for line in log_lines:
-            print("[YSQ工具箱] " + line)
+            print("[GULU工具箱] " + line)
 
         return {
             "result": (out_tensor, "\n".join(paths), dim_text),

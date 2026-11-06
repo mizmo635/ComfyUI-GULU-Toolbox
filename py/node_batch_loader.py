@@ -110,11 +110,11 @@ def save_preview(pil):
         os.makedirs(temp_dir, exist_ok=True)
         pv = pil.copy()
         pv.thumbnail((PREVIEW_MAX_EDGE, PREVIEW_MAX_EDGE))
-        name = f"ysq_load_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.jpg"
+        name = f"gulu_load_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.jpg"
         pv.save(os.path.join(temp_dir, name), "JPEG", quality=PREVIEW_QUALITY)
         return name
     except Exception as e:
-        print(f"[YSQ工具箱] 预览图生成失败（不影响处理）：{e}")
+        print(f"[GULU工具箱] 预览图生成失败（不影响处理）：{e}")
         return None
 
 
@@ -197,10 +197,10 @@ class ImageBatchLoopLoader:
 
         out = torch.cat(tensors, dim=0)
         preview = save_preview(load_pil(files[0]))
-        print(f"[YSQ工具箱] 批量导入（一次模式）：{len(files)} 张 {first_size[0]}×{first_size[1]}")
+        print(f"[GULU工具箱] 批量导入（一次模式）：{len(files)} 张 {first_size[0]}×{first_size[1]}")
 
         return {
-            "ui": {"ysq_show": [{
+            "ui": {"gulu_show": [{
                 "filename": preview or "",
                 "width": first_size[0],
                 "height": first_size[1],
@@ -237,7 +237,7 @@ class ImageBatchLoopLoader:
         # 接「图像」端口 -> 顺序模式
         idx = int(循环位置 or 0)
         if idx < 0 or idx >= total:
-            print(f"[YSQ工具箱] 循环位置 {idx} 超出本批张数 {total}，自动回到第一张")
+            print(f"[GULU工具箱] 循环位置 {idx} 超出本批张数 {total}，自动回到第一张")
             idx = 0
 
         path = files[idx]
@@ -247,11 +247,11 @@ class ImageBatchLoopLoader:
         more = idx + 1 < total
 
         tail = "→ 自动继续下一张" if more else "→ 本批最后一张，结束"
-        print(f"[YSQ工具箱] 批量导入 {idx + 1}/{total}：{name}  "
+        print(f"[GULU工具箱] 批量导入 {idx + 1}/{total}：{name}  "
               f"({pil.width}×{pil.height})  {tail}")
 
         return {
-            "ui": {"ysq_show": [{
+            "ui": {"gulu_show": [{
                 "filename": save_preview(pil) or "",
                 "width": pil.width,
                 "height": pil.height,

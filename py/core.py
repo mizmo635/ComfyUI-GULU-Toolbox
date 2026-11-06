@@ -22,12 +22,13 @@ from PIL import Image, ImageOps
 
 # ---------------------------------------------------------------- 常量
 
-CATEGORY = "YSQ工具箱/导出"
-CATEGORY_RESIZE = "YSQ工具箱/图像"
-CATEGORY_LOADER = "YSQ工具箱/导入"
-CATEGORY_LORA = "YSQ工具箱/LoRA"
-CATEGORY_POSE = "YSQ工具箱/循环"
-CATEGORY_KREA = "YSQ工具箱/Krea2"
+CATEGORY = "GULU工具箱/导出"
+CATEGORY_RESIZE = "GULU工具箱/图像"
+CATEGORY_LOADER = "GULU工具箱/导入"
+CATEGORY_LORA = "GULU工具箱/LoRA"
+CATEGORY_TEXT = "GULU工具箱/文本"
+CATEGORY_POSE = "GULU工具箱/循环"
+CATEGORY_KREA = "GULU工具箱/Krea2"
 
 # 按边压缩：以哪条边为基准
 EDGE_MODES = ["长边", "短边"]
@@ -37,6 +38,15 @@ FALLBACK_MODES = ["输出实际尺寸", "输出对齐后尺寸", "强制按目�
 
 # 支持的保存格式（本插件只做 PNG / JPG 两种）
 FORMATS = ["PNG", "JPG"]
+
+# PNG 里写入什么：
+#   写入       = 完整工作流（旧行为，拖回 ComfyUI 能还原整条工作流）
+#   不写入     = 什么都不写（旧行为）
+#   只写提示词 = 只写 text 端口接进来的文本，不写工作流 JSON
+PNG_META_MODES = ["写入", "不写入", "只写提示词"]
+
+# 提示词在图片元数据里用的键名（GULU 提取节点按这个键优先读）
+TEXT_META_KEY = "text"
 
 # 水印来源
 WM_SOURCES = ["关闭", "水印文件", "接入图像端口"]

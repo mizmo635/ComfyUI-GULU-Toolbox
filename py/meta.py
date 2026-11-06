@@ -23,7 +23,7 @@ def build_meta(prompt, extra_pnginfo):
         if prompt is not None:
             meta["prompt"] = json.dumps(prompt)
     except Exception as e:
-        print(f"[YSQ工具箱] 工作流信息整理失败（已忽略）：{e}")
+        print(f"[GULU工具箱] 工作流信息整理失败（已忽略）：{e}")
     return meta
 
 
@@ -38,16 +38,30 @@ def embed(data, ext, meta):
         if e in ("jpg", "jpeg"):
             return _jpeg(data, meta), True
     except Exception as ex:
-        print(f"[YSQ工具箱] 写入工作流信息失败（{e}，已按原样保存）：{ex}")
+        print(f"[GULU工具箱] 写入工作流信息失败（{e}，已按原样保存）：{ex}")
     return data, False
 
 
 # ------------------------------------------------------------------ PNG
 
 def _text_chunk(key, text):
-    body = key.encode("latin-1", "replace") + b"\x00" + text.encode("utf-8", "replace")
-    crc = zlib.crc32(b"tEXt" + body) & 0xFFFFFFFF
-    return struct.pack(">I", len(body)) + b"tEXt" + body + struct.pack(">I", crc)
+    """
+    生成一个文本块。
+
+    PNG 规范里 tEXt 只允许 latin-1，中文写进去会被 Pillow 按 latin-1 读成乱码。
+    所以按内容自动选：纯 ASCII 走 tEXt（兼容老流程），含中文走 iTXt（UTF-8，规范做法）。
+    两种块 Pillow / ComfyUI / 常见看图工具都能读。
+    """
+    k = key.encode("latin-1", "replace")
+    try:
+        body = k + b"\x00" + text.encode("latin-1")
+        chunk_type = b"tEXt"
+    except UnicodeEncodeError:
+        # iTXt: keyword \0 | 压缩标志 | 压缩方法 | 语言标签 \0 | 译名 \0 | UTF-8 正文
+        body = k + b"\x00" + b"\x00\x00" + b"\x00" + b"\x00" + text.encode("utf-8")
+        chunk_type = b"iTXt"
+    crc = zlib.crc32(chunk_type + body) & 0xFFFFFFFF
+    return struct.pack(">I", len(body)) + chunk_type + body + struct.pack(">I", crc)
 
 
 def _png(data, meta):
