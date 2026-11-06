@@ -18,7 +18,7 @@
 import os
 import re
 
-from .core import CATEGORY_LOADER
+from .core import CATEGORY_LOADER, resolve_file_path
 
 # 分隔符模式
 SEP_MODES = ["空行", "---", "自定义"]
@@ -125,7 +125,8 @@ class PromptBatchLoopLoader:
                     "default": DEFAULT_FILE,
                     "multiline": False,
                     "tooltip": "要读取的文本文件（.txt / .md 都行）。文件里每一条提示词之间用空行隔开。"
-                               "路径里的正斜杠 / 和反斜杠 \\ 都能用，直接粘「复制文件地址」带引号也行。",
+                               "点下面的「选择文件上传」按钮或直接把文件拖到节点上最省事；"
+                               "也可以手填路径，正斜杠 / 和反斜杠 \\ 都能用，带引号也行。",
                 }),
                 "分隔符": (SEP_MODES, {
                     "default": "空行",
@@ -167,11 +168,13 @@ class PromptBatchLoopLoader:
     def run(self, 提示词文件, 分隔符, 自定义分隔符, 跳过注释行, 合并条目内换行,
             起始索引, 加载数量, 循环位置=0):
 
-        path = os.path.expanduser(str(提示词文件 or "").strip().strip('"').strip("'"))
-        if not path:
+        raw = str(提示词文件 or "").strip()
+        if not raw:
             raise ValueError("还没有填「提示词文件」")
-        if not os.path.isfile(path):
-            raise ValueError(f"提示词文件不存在：{path}")
+        path = resolve_file_path(raw)
+        if not path:
+            first = (raw.replace("\r", "").split("\n") or [raw])[0]
+            raise ValueError(f"提示词文件不存在：{first}")
 
         entries, enc = collect_entries(path, 分隔符, 自定义分隔符, 跳过注释行, 合并条目内换行)
         if not entries:

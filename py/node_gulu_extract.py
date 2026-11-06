@@ -20,7 +20,7 @@ import os
 
 from PIL import Image, ImageOps
 
-from .core import CATEGORY_TEXT, TEXT_META_KEY, save_temp_preview
+from .core import CATEGORY_TEXT, TEXT_META_KEY, resolve_file_path, save_temp_preview
 
 
 # 我们自己写入的键排在最前面
@@ -234,32 +234,7 @@ def extract(path):
 
 def resolve_path(raw):
     """把用户给的路径字符串变成真实存在的文件；找不到返回空串（不抛错，免得打断批量链路）。"""
-    lines = [p.strip().strip('"').strip("'") for p in str(raw or "").replace("\r", "").split("\n")]
-    lines = [p for p in lines if p]
-    if not lines:
-        return ""
-
-    for item in lines:
-        if os.path.isfile(item):
-            return item
-
-    # 相对路径兜底：相对 ComfyUI 根目录
-    base = ""
-    try:
-        import folder_paths
-        base = getattr(folder_paths, "base_path", "") or ""
-    except Exception:
-        base = ""
-
-    if base:
-        for item in lines:
-            if os.path.isabs(item):
-                continue
-            joined = os.path.join(base, item.replace("/", os.sep))
-            if os.path.isfile(joined):
-                return joined
-
-    return ""
+    return resolve_file_path(raw)
 
 
 class GuluPromptExtractCN:
@@ -282,8 +257,9 @@ class GuluPromptExtractCN:
                 "图片路径": ("STRING", {
                     "default": "",
                     "multiline": False,
-                    "tooltip": "要读取的图片文件路径。可以接上游「图像后处理导出」的「保存路径」输出，"
-                               "也可以直接粘 Windows 路径。多行时只取第一个真实存在的文件。",
+                    "tooltip": "要读取的图片文件。点下面的「选择图片上传」按钮或直接把图片拖到节点上最省事；"
+                               "也可以接上游「图像后处理导出」的「保存路径」输出，或直接粘 Windows 路径。"
+                               "多行时只取第一个真实存在的文件。",
                 }),
             },
         }

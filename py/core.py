@@ -351,6 +351,52 @@ def clean_subdir(subdir):
     return "/".join(parts)
 
 
+def resolve_file_path(raw):
+    """把用户给的路径变成真实存在的文件路径；找不到返回空串。
+
+    认三种写法（「选择文件上传」按钮填的是第二种）：
+        · 绝对路径            C:\\x\\y.txt   或  C:/x/y.txt
+        · input 目录里的文件名  正面提示词.txt
+        · 相对 ComfyUI 根目录   input/正面提示词.txt
+    多行也认（保存节点「保存路径」输出可能是多行，逐行试）。
+    """
+    items = [p.strip().strip('"').strip("'")
+             for p in str(raw or "").replace("\r", "").split("\n")]
+    items = [p for p in items if p]
+    if not items:
+        return ""
+
+    # 1. 原样就能找到（统一转成绝对路径，免得依赖当时的工作目录）
+    for item in items:
+        cand = os.path.expanduser(item)
+        if os.path.isfile(cand):
+            return os.path.abspath(cand)
+
+    # 2. 去 input 目录 / ComfyUI 根目录下找
+    bases = []
+    try:
+        import folder_paths
+        try:
+            bases.append(folder_paths.get_input_directory())
+        except Exception:
+            pass
+        bases.append(getattr(folder_paths, "base_path", "") or "")
+    except Exception:
+        pass
+
+    for base in bases:
+        if not base:
+            continue
+        for item in items:
+            if os.path.isabs(item):
+                continue
+            cand = os.path.join(base, item.replace("/", os.sep))
+            if os.path.isfile(cand):
+                return os.path.normpath(cand)
+
+    return ""
+
+
 def resolve_save_dir(save_mode, subdir, custom_path, default_dir):
     """解析最终保存目录并创建。"""
     if str(save_mode).startswith("自定义"):

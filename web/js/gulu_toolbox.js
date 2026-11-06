@@ -59,6 +59,12 @@ const ITP_NODES = {
     hide: ["循环位置"],
     loop: true,          // 和图片批量同一套推进机制
     panel: "prompt",     // 显示 第 x/y 条 + 文件名 + 提示词预览
+    pick: { widget: "提示词文件", label: "📂 选择文件上传", accept: ".txt,.md,.text,text/plain" },
+  },
+  GuluPromptExtractCN: {
+    rules: {},
+    hide: [],
+    pick: { widget: "图片路径", label: "📂 选择图片上传", accept: "image/*" },
   },
 };
 
@@ -897,6 +903,129 @@ function itpHookLoopEvents(app) {
 }
 
 /* ==================================================================
+ * 选择文件上传（照官方「加载图像」的做法）
+ * 浏览器只能拿到文件名、拿不到完整路径，所以走 ComfyUI 自己的
+ * /upload/image 接口把文件复制进 input 目录，再把文件名写进输入框。
+ * 后端认得 input 目录里的文件名，所以填完直接能跑。
+ * 两种入口共用同一段上传逻辑：点按钮选、直接把文件拖到节点上。
+ * ================================================================== */
+
+const ITP_IMG_EXT = /\.(png|jpe?g|webp|bmp|gif|tif?f|avif)$/i;
+
+function itpFileAllowed(file, accept) {
+  if (!accept) return true;
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+  for (const rule of String(accept).split(",")) {
+    const r = rule.trim().toLowerCase();
+    if (!r) continue;
+    if (r.endsWith("/*")) {
+      if (type.startsWith(r.slice(0, -1))) return true;   // image/* -> image/
+    } else if (r.startsWith(".")) {
+      if (name.endsWith(r)) return true;
+    } else if (type === r) {
+      return true;
+    }
+  }
+  // 浏览器有时给不出 MIME（尤其是拖进来的 txt），按扩展名兜一道
+  if (accept.includes("image") && ITP_IMG_EXT.test(name)) return true;
+  return false;
+}
+
+async function itpUploadFile(node, widget, file) {
+  const body = new FormData();
+  body.append("image", file);          // 字段名固定叫 image，传文本文件也一样收
+  body.append("type", "input");
+  body.append("overwrite", "true");    // 同名直接覆盖，不堆 (1)(2)
+
+  const res = await fetch("/upload/image", { method: "POST", body });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+
+  const name = data.subfolder ? `${data.subfolder}/${data.name}` : data.name;
+  widget.value = name;
+  if (typeof widget.callback === "function") widget.callback(name, node);
+  console.log(`[GULU工具箱] 已上传 ${file.name} → input/${name}`);
+  itpFit(node);
+  itpDirty(node);
+  return name;
+}
+
+function itpUploadAndFill(node, widget, accept) {
+  const picker = document.createElement("input");
+  picker.type = "file";
+  picker.accept = accept || "";
+  picker.style.position = "fixed";
+  picker.style.left = "-9999px";
+  picker.style.top = "0";
+
+  picker.addEventListener("change", async () => {
+    const file = picker.files && picker.files[0];
+    picker.remove();
+    if (!file) return;
+    try {
+      await itpUploadFile(node, widget, file);
+    } catch (e) {
+      console.warn("[GULU工具箱] 上传失败：", e);
+      alert("上传失败：" + (e && e.message ? e.message : e));
+    }
+  });
+
+  document.body.appendChild(picker);
+  picker.click();
+}
+
+/* 把文件拖到节点上也能装载（前端会先问 onDragOver，返回 true 才把 drop 交给这个节点） */
+function itpWireDrop(node, widget, accept) {
+  node.onDragOver = function (e) {
+    const dt = e && e.dataTransfer;
+    if (!dt || !dt.types) return false;
+    return Array.prototype.indexOf.call(dt.types, "Files") !== -1;
+  };
+
+  node.onDragDrop = async function (e) {
+    const files = e && e.dataTransfer && e.dataTransfer.files;
+    if (!files || !files.length) return false;
+
+    const file = files[0];
+    if (!itpFileAllowed(file, accept)) {
+      // 返回 false 就交还给画布默认行为（拖图片会被当成新建「加载图像」节点）
+      console.log(`[GULU工具箱] 这个节点不收 ${file.name}，已忽略`);
+      return false;
+    }
+
+    try {
+      await itpUploadFile(node, widget, file);
+      return true;
+    } catch (err) {
+      console.warn("[GULU工具箱] 拖放上传失败：", err);
+      alert("上传失败：" + (err && err.message ? err.message : err));
+      return true;
+    }
+  };
+}
+
+function itpAddPicker(node, conf) {
+  if (!conf) return;
+  const target = node.widgets && node.widgets.find((w) => w.name === conf.widget);
+  if (!target) return;
+
+  const label = conf.label || "📂 选择文件上传";
+  const btn = node.addWidget("button", label, null, () => {
+    itpUploadAndFill(node, target, conf.accept);
+  });
+
+  // 按钮不是数据，不写进工作流
+  if (btn) {
+    btn.serialize = false;
+    if (btn.options) btn.options.serialize = false;
+    btn.tooltip = "选一个本机文件，复制到 ComfyUI/input 后自动填进上面的框；也可以直接把文件拖到节点上";
+  }
+
+  itpWireDrop(node, target, conf.accept);
+}
+
+/* ==================================================================
  * 注册
  * ================================================================== */
 
@@ -925,6 +1054,9 @@ if (ITP_APP && typeof ITP_APP.registerExtension === "function") {
           if (conf.panel === "prompt") itpBuildPromptPanel(node);
           if (conf.panel === "lora") { itpBuildLoraEditor(node); itpBuildLoraPanel(node); }
           if (conf.loop) { itpWrapQueue(itpApp()); itpHookLoopEvents(itpApp()); }
+
+          // 「选择文件上传」按钮（放在所有控件之后）
+          if (conf.pick) itpAddPicker(node, conf.pick);
 
           // 内部参数：直接不显示
           for (const name of hidden) itpShow(find(name), false);
