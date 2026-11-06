@@ -678,39 +678,42 @@ function itpUpdateLoraPanel(node, message) {
 
 /* ---------- 提示词批量导入：文字面板（没有图，只显示进度和预览） ---------- */
 
-const ITP_PROMPT_PANEL_H = 66;
+const ITP_PROMPT_PANEL_H = 144;
 
 function itpBuildPromptPanel(node) {
   const wrap = itpDiv(
-    "display:flex;flex-direction:column;justify-content:center;gap:3px;" +
+    "display:flex;flex-direction:column;gap:3px;" +
     "padding:6px 8px 8px;box-sizing:border-box;color:inherit;" +
     "font-family:system-ui,'Segoe UI','Microsoft YaHei',sans-serif;"
   );
   const l1 = itpDiv(
-    "font-size:15px;font-weight:600;line-height:1.2;color:inherit;" +
+    "flex:none;font-size:15px;font-weight:600;line-height:1.2;color:inherit;" +
     "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "— / —"
   );
   const l2 = itpDiv(
-    "font-size:11px;line-height:1.35;opacity:.7;color:inherit;" +
+    "flex:none;font-size:11px;line-height:1.35;opacity:.7;color:inherit;" +
     "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "等待运行"
   );
-  const l3 = itpDiv(
-    "font-size:10px;line-height:1.35;opacity:.5;color:inherit;" +
-    "display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;", ""
+  // 完整提示词：可上下滚动，也能直接选中复制出来用
+  const box = itpDiv(
+    "flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;" +
+    "font-size:11px;line-height:1.45;opacity:.85;color:inherit;" +
+    "white-space:pre-wrap;word-break:break-word;" +
+    "user-select:text;-webkit-user-select:text;cursor:text;", ""
   );
   wrap.appendChild(l1);
   wrap.appendChild(l2);
-  wrap.appendChild(l3);
+  wrap.appendChild(box);
 
   const widget = node.addDOMWidget("提示词信息", "gulu_prompt_panel", wrap, {
     serialize: false,
     hideOnZoom: false,
   });
   widget.computeSize = function (width) {
-    return [Math.max(140, width || 240), ITP_PROMPT_PANEL_H];
+    return [Math.max(160, width || 260), ITP_PROMPT_PANEL_H];
   };
 
-  node.__guluPromptUI = { l1, l2, l3 };
+  node.__guluPromptUI = { l1, l2, box };
 }
 
 function itpUpdatePromptPanel(node, message) {
@@ -723,8 +726,7 @@ function itpUpdatePromptPanel(node, message) {
   ui.l1.textContent = `${item.index + 1} / ${item.total}`;
   ui.l2.textContent = `${item.name || ""}  ·  ${item.chars || 0} 字`;
   ui.l2.title = item.path || item.name || "";
-  ui.l3.textContent = item.preview || "";
-  ui.l3.title = item.preview || "";
+  ui.box.textContent = item.text || item.preview || "";
   itpDirty(node);
 }
 

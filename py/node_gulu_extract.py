@@ -18,9 +18,9 @@
 import json
 import os
 
-from PIL import Image
+from PIL import Image, ImageOps
 
-from .core import CATEGORY_TEXT, TEXT_META_KEY
+from .core import CATEGORY_TEXT, TEXT_META_KEY, save_temp_preview
 
 
 # 我们自己写入的键排在最前面
@@ -288,21 +288,34 @@ class GuluPromptExtractCN:
             },
         }
 
+    @staticmethod
+    def _preview(path):
+        """缩一张预览图进 temp 目录，让前端像官方 LoadImage 那样把这张图直接显示在节点上。"""
+        try:
+            with Image.open(path) as im:
+                name = save_temp_preview(ImageOps.exif_transpose(im), prefix="gulu_extract")
+            if name:
+                return {"images": [{"filename": name, "subfolder": "", "type": "temp"}]}
+        except Exception as e:
+            print(f"[GULU工具箱] 预览图生成失败（不影响提取）：{e}")
+        return {}
+
     def run(self, 图片路径):
         path = resolve_path(图片路径)
         if not path:
             raw = str(图片路径 or "").strip()
             if raw:
-                print(f"[GULU工具箱] GULU 提取：找不到图片文件，已输出空字符串 → {raw.splitlines()[0] if raw.splitlines() else raw}")
+                head = raw.splitlines()[0] if raw.splitlines() else raw
+                print(f"[GULU工具箱] GULU 提取：找不到图片文件，已输出空字符串 → {head}")
             else:
                 print("[GULU工具箱] GULU 提取：没有填图片路径，已输出空字符串")
-            return ("",)
+            return {"ui": {}, "result": ("",)}
 
         try:
             prompt, source = extract(path)
         except Exception as e:
             print(f"[GULU工具箱] GULU 提取失败（{os.path.basename(path)}）：{e}")
-            return ("",)
+            return {"ui": self._preview(path), "result": ("",)}
 
         print(f"[GULU工具箱] GULU 提取：{os.path.basename(path)} → {source}，{len(prompt)} 字")
-        return (prompt,)
+        return {"ui": self._preview(path), "result": (prompt,)}

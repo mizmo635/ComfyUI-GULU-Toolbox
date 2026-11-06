@@ -220,6 +220,7 @@ class PromptBatchLoopLoader:
                 "next": idx + 1,
                 "more": more,
                 "preview": preview,
+                "text": prompt,          # 完整内容，给节点面板滚动显示
                 "chars": len(prompt),
                 "encoding": enc,
             }]},

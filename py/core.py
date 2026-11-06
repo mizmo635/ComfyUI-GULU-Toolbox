@@ -447,3 +447,34 @@ def list_watermark_files(input_dir, limit=80):
     if not merged:
         return ["（把透明 PNG 放进 input/watermarks 目录）"]
     return merged
+
+
+# ---------------------------------------------------------------- 节点预览图
+
+PREVIEW_MAX_EDGE = 1024
+PREVIEW_QUALITY = 88
+
+
+def save_temp_preview(pil, prefix="gulu", max_edge=None, quality=None):
+    """
+    把一张 PIL 图缩图后写进 ComfyUI 的 temp 目录，返回文件名。
+
+    用途：节点的图片预览（前端拿 ui.images 的 filename 去 /view 取图）。
+    失败返回 None —— 预览出不来不影响主流程。
+    """
+    try:
+        import folder_paths  # 延迟导入：core 被非 ComfyUI 环境引用时也不至于整包炸掉
+        temp_dir = folder_paths.get_temp_directory()
+        os.makedirs(temp_dir, exist_ok=True)
+        edge = int(max_edge or PREVIEW_MAX_EDGE)
+        pv = pil.copy()
+        pv.thumbnail((edge, edge))
+        if pv.mode != "RGB":
+            pv = pv.convert("RGB")
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        name = f"{prefix}_{stamp}.jpg"
+        pv.save(os.path.join(temp_dir, name), "JPEG", quality=int(quality or PREVIEW_QUALITY))
+        return name
+    except Exception as e:
+        print(f"[GULU工具箱] 预览图生成失败（不影响处理）：{e}")
+        return None

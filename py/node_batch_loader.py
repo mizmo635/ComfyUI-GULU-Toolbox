@@ -13,13 +13,11 @@
 """
 
 import os
-import time
-import uuid
 
 import folder_paths
 import torch
 
-from .core import CATEGORY_LOADER, load_pil, pil_to_tensor
+from .core import CATEGORY_LOADER, load_pil, pil_to_tensor, save_temp_preview
 
 # 排序方式
 SORT_MODES = [
@@ -99,23 +97,9 @@ def _used_ports(prompt, unique_id):
 
 # ---------------------------------------------------------------- 预览
 
-PREVIEW_MAX_EDGE = 1024
-PREVIEW_QUALITY = 88
-
-
 def save_preview(pil):
     """缩一张小图写进 temp 目录给节点预览用，返回文件名。失败返回 None。"""
-    try:
-        temp_dir = folder_paths.get_temp_directory()
-        os.makedirs(temp_dir, exist_ok=True)
-        pv = pil.copy()
-        pv.thumbnail((PREVIEW_MAX_EDGE, PREVIEW_MAX_EDGE))
-        name = f"gulu_load_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.jpg"
-        pv.save(os.path.join(temp_dir, name), "JPEG", quality=PREVIEW_QUALITY)
-        return name
-    except Exception as e:
-        print(f"[GULU工具箱] 预览图生成失败（不影响处理）：{e}")
-        return None
+    return save_temp_preview(pil, prefix="gulu_load")
 
 
 # ---------------------------------------------------------------- 节点
