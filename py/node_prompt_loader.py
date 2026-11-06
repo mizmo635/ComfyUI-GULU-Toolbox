@@ -29,7 +29,8 @@ COMMENT_PREFIX = "#"
 # 解码顺序：utf-8-sig 先吃掉 BOM；gb18030 兜底中文 Windows 记事本存的 GBK
 ENCODINGS = ("utf-8-sig", "utf-8", "gb18030", "latin-1")
 
-DEFAULT_FILE = "G:/提示词/正面提示词.txt"
+# 默认留空：不猜用户的目录，填了才跑
+DEFAULT_FILE = ""
 
 
 # ---------------------------------------------------------------- 读取与切分
@@ -123,7 +124,8 @@ class PromptBatchLoopLoader:
                 "提示词文件": ("STRING", {
                     "default": DEFAULT_FILE,
                     "multiline": False,
-                    "tooltip": "要读取的文本文件（.txt / .md 都行）。文件里每一条提示词之间用空行隔开。",
+                    "tooltip": "要读取的文本文件（.txt / .md 都行）。文件里每一条提示词之间用空行隔开。"
+                               "路径里的正斜杠 / 和反斜杠 \\ 都能用，直接粘「复制文件地址」带引号也行。",
                 }),
                 "分隔符": (SEP_MODES, {
                     "default": "空行",
