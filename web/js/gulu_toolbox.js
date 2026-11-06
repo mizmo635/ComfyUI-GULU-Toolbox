@@ -54,6 +54,12 @@ const ITP_NODES = {
     loop: true,          // 前端驱动轮转
     panel: "lora",       // 显示 第 x/y 个 + 当前 LoRA
   },
+  PromptBatchLoopLoader: {
+    rules: {},           // 下面填
+    hide: ["循环位置"],
+    loop: true,          // 和图片批量同一套推进机制
+    panel: "prompt",     // 显示 第 x/y 条 + 文件名 + 提示词预览
+  },
 };
 
 
@@ -95,6 +101,15 @@ const ITP_EXPORT_RULES = {
 };
 
 ITP_NODES.ImagePostExportCN.rules = ITP_EXPORT_RULES;
+
+/* 提示词批量导入：只有选「自定义」时才显示自定义分隔符那一栏 */
+const ITP_PROMPT_RULES = {
+  分隔符: {
+    自定义分隔符: ["自定义"],
+  },
+};
+
+ITP_NODES.PromptBatchLoopLoader.rules = ITP_PROMPT_RULES;
 
 /* ==================================================================
  * 工具
@@ -661,6 +676,58 @@ function itpUpdateLoraPanel(node, message) {
   itpDirty(node);
 }
 
+/* ---------- 提示词批量导入：文字面板（没有图，只显示进度和预览） ---------- */
+
+const ITP_PROMPT_PANEL_H = 66;
+
+function itpBuildPromptPanel(node) {
+  const wrap = itpDiv(
+    "display:flex;flex-direction:column;justify-content:center;gap:3px;" +
+    "padding:6px 8px 8px;box-sizing:border-box;color:inherit;" +
+    "font-family:system-ui,'Segoe UI','Microsoft YaHei',sans-serif;"
+  );
+  const l1 = itpDiv(
+    "font-size:15px;font-weight:600;line-height:1.2;color:inherit;" +
+    "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "— / —"
+  );
+  const l2 = itpDiv(
+    "font-size:11px;line-height:1.35;opacity:.7;color:inherit;" +
+    "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "等待运行"
+  );
+  const l3 = itpDiv(
+    "font-size:10px;line-height:1.35;opacity:.5;color:inherit;" +
+    "display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;", ""
+  );
+  wrap.appendChild(l1);
+  wrap.appendChild(l2);
+  wrap.appendChild(l3);
+
+  const widget = node.addDOMWidget("提示词信息", "gulu_prompt_panel", wrap, {
+    serialize: false,
+    hideOnZoom: false,
+  });
+  widget.computeSize = function (width) {
+    return [Math.max(140, width || 240), ITP_PROMPT_PANEL_H];
+  };
+
+  node.__guluPromptUI = { l1, l2, l3 };
+}
+
+function itpUpdatePromptPanel(node, message) {
+  const ui = node.__guluPromptUI;
+  if (!ui) return;
+  const list = message && message.gulu_show;
+  const item = Array.isArray(list) ? list[0] : null;
+  if (!item) return;
+
+  ui.l1.textContent = `${item.index + 1} / ${item.total}`;
+  ui.l2.textContent = `${item.name || ""}  ·  ${item.chars || 0} 字`;
+  ui.l2.title = item.path || item.name || "";
+  ui.l3.textContent = item.preview || "";
+  ui.l3.title = item.preview || "";
+  itpDirty(node);
+}
+
 /* ==================================================================
  * 循环推进（批量导入 / LoRA 轮转 专用）
  * ------------------------------------------------------------------
@@ -675,7 +742,17 @@ function itpUpdateLoraPanel(node, message) {
  * 才把「循环位置」+1 并提交下一轮。复杂工作流里也绝不会提前抢跑。
  * ================================================================== */
 
-let ITP_LOOP_PENDING = null;   // { nodeId, promptId, info }
+/* 同一轮里可能有好几个循环节点（图像批量 + 提示词批量 + LoRA 轮转）。
+ * 所以这里必须按 nodeId 分别收集，不能用单个变量 —— 否则后执行的那个会把前一个冲掉，
+ * 表现就是「只有一路在推进，另一路永远卡在第 1 条」。 */
+const ITP_LOOP_PENDING = new Map();   // nodeId -> { nodeId, promptId, info }
+
+/* 控制台日志里给节点起个人能看懂的名字 */
+const ITP_LOOP_LABEL = {
+  ImageBatchLoopLoader: "图像批量导入",
+  PromptBatchLoopLoader: "提示词批量导入",
+  LoRACycleCN: "LoRA 轮转",
+};
 let ITP_QUEUE_WRAPPED = false;
 let ITP_EVENTS_HOOKED = false;
 
@@ -714,7 +791,7 @@ function itpWrapQueue(app) {
   app.queuePrompt = function () {
     try {
       if (!window.__guluAutoQueue) {
-        ITP_LOOP_PENDING = null;
+        ITP_LOOP_PENDING.clear();
         for (const n of itpLoopNodes(app)) itpSetLoopIndex(n, 0);
       }
     } catch (e) { /* 忽略 */ }
@@ -723,23 +800,48 @@ function itpWrapQueue(app) {
   };
 }
 
-/** 整轮真的跑完了，才推进到下一张 */
-function itpAdvance(app, nodeId, info) {
-  const node = itpFindLoopNode(app, nodeId);
-  if (!node) return;
+/**
+ * 整轮真的跑完了，才推进。items = 这一轮所有报告了 gulu_show 的循环节点。
+ *
+ * 两条规则：
+ *   · 每个节点各自 +1 —— 所以「第 N 张图」天然配「第 N 条提示词」；
+ *   · 只要有一个节点报告 more = false，整批立刻结束（按较短的那一批收尾）。
+ *     不这么做的话，短的那路会被推超、后端绕回第 1 条 → 无限出图。
+ */
+function itpApplyPending(app, items) {
+  let needQueue = false;
+  let anyDone = false;
 
-  if (!info.more) {
-    itpSetLoopIndex(node, 0);          // 本批跑完，复位
+  for (const it of items) {
+    const node = itpFindLoopNode(app, it.nodeId);
+    if (!node) continue;
+    const info = it.info || {};
+    const label = ITP_LOOP_LABEL[node.type] || "批量节点";
+
+    if (!info.more) {
+      itpSetLoopIndex(node, 0);
+      itpDirty(node);
+      anyDone = true;
+      console.log(`[GULU工具箱] ${label} 完成：共 ${info.total} 条`);
+      continue;
+    }
+
+    // next 优先用后端给的；老版本没这个字段就用 index + 1 兜底
+    const nextIdx = (typeof info.next === "number") ? info.next : (Number(info.index) + 1);
+    itpSetLoopIndex(node, nextIdx);
     itpDirty(node);
-    console.log("[GULU工具箱] 批量导入完成：共 " + info.total + " 张");
+    needQueue = true;
+    console.log(`[GULU工具箱] ${label} ${info.index + 1}/${info.total} 完成 → 推进到第 ${nextIdx + 1} 个`);
+  }
+
+  if (anyDone || !needQueue) {
+    // 有一路跑完 = 这一批结束；所有循环节点一起复位，免得下次手动运行从中间开始
+    for (const n of itpLoopNodes(app)) itpSetLoopIndex(n, 0);
+    window.__guluAutoQueue = false;
+    if (anyDone) console.log("[GULU工具箱] 有一路已跑完，本批结束（按较短的那批收尾）");
     return;
   }
 
-  // next 优先用后端给的；万一是老版本没有这个字段，就用 index + 1 兜底
-  const nextIdx = (typeof info.next === "number") ? info.next : (Number(info.index) + 1);
-  console.log(`[GULU工具箱] 第 ${info.index + 1}/${info.total} 张已跑完，继续下一张（→ ${nextIdx}）`);
-  itpSetLoopIndex(node, nextIdx);
-  itpDirty(node);
   window.__guluAutoQueue = true;
   setTimeout(() => {
     try {
@@ -765,25 +867,29 @@ function itpHookLoopEvents(app) {
     const list = d.output.gulu_show;
     const info = Array.isArray(list) ? list[0] : null;
     if (!info) return;
-    // 图片加载器的「一次模式」不循环；姿势变体循环没有 mode 字段，默认就循环
+    // 「一次模式」不循环；没有 mode 字段的老节点默认按循环处理
     if (info.mode && info.mode !== "loop") return;
-    ITP_LOOP_PENDING = {
-      nodeId: d.display_node != null ? d.display_node : d.node,
-      promptId: d.prompt_id,
-      info,
-    };
+
+    const nodeId = String(d.display_node != null ? d.display_node : d.node);
+    ITP_LOOP_PENDING.set(nodeId, { nodeId, promptId: d.prompt_id, info });
   });
 
   api.addEventListener("execution_success", (e) => {
     const pid = e && e.detail && e.detail.prompt_id;
-    if (!ITP_LOOP_PENDING) return;
-    if (pid && ITP_LOOP_PENDING.promptId && pid !== ITP_LOOP_PENDING.promptId) return;
-    const { nodeId, info } = ITP_LOOP_PENDING;
-    ITP_LOOP_PENDING = null;
-    itpAdvance(app, nodeId, info);
+    if (ITP_LOOP_PENDING.size === 0) return;
+
+    const items = [];
+    for (const it of ITP_LOOP_PENDING.values()) {
+      // 只认这一轮（prompt_id 对得上）的报告，避免上一轮的残留混进来
+      if (!pid || !it.promptId || it.promptId === pid) items.push(it);
+    }
+    ITP_LOOP_PENDING.clear();
+    if (!items.length) return;
+
+    itpApplyPending(app, items);
   });
 
-  const stop = () => { ITP_LOOP_PENDING = null; };
+  const stop = () => { ITP_LOOP_PENDING.clear(); };
   api.addEventListener("execution_error", stop);
   api.addEventListener("execution_interrupted", stop);
 }
@@ -814,6 +920,7 @@ if (ITP_APP && typeof ITP_APP.registerExtension === "function") {
           // 节点下方的小面板（按边压缩：显示计算后的宽高）
           if (conf.panel === "size") itpBuildSizePanel(node);
           if (conf.panel === "loader") itpBuildLoaderPanel(node);
+          if (conf.panel === "prompt") itpBuildPromptPanel(node);
           if (conf.panel === "lora") { itpBuildLoraEditor(node); itpBuildLoraPanel(node); }
           if (conf.loop) { itpWrapQueue(itpApp()); itpHookLoopEvents(itpApp()); }
 
@@ -850,6 +957,7 @@ if (ITP_APP && typeof ITP_APP.registerExtension === "function") {
           try {
             if (conf.panel === "size") itpUpdateSizePanel(this, message);
             if (conf.panel === "loader") itpUpdateLoaderPanel(this, message);
+            if (conf.panel === "prompt") itpUpdatePromptPanel(this, message);
             if (conf.panel === "lora") itpUpdateLoraPanel(this, message);
           } catch (e) {
             console.warn("[GULU工具箱] 尺寸面板更新失败：", e);

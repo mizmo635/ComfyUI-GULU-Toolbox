@@ -235,16 +235,19 @@ class ImageBatchLoopLoader:
             return self._run_batch(files, total)
 
         # 接「图像」端口 -> 顺序模式
+        # 越界防御：宁可停，也不绕回第一张 —— 否则和另一个批量节点长度不一致时会被推超、无限出图
         idx = int(循环位置 or 0)
+        forced_stop = False
         if idx < 0 or idx >= total:
-            print(f"[GULU工具箱] 循环位置 {idx} 超出本批张数 {total}，自动回到第一张")
-            idx = 0
+            print(f"[GULU工具箱] 循环位置 {idx} 超出本批张数 {total}，按最后一张处理并结束")
+            idx = max(0, total - 1)
+            forced_stop = True
 
         path = files[idx]
         pil = load_pil(path)
         tensor = pil_to_tensor(pil).unsqueeze(0)
         name = os.path.basename(path)
-        more = idx + 1 < total
+        more = (not forced_stop) and (idx + 1 < total)
 
         tail = "→ 自动继续下一张" if more else "→ 本批最后一张，结束"
         print(f"[GULU工具箱] 批量导入 {idx + 1}/{total}：{name}  "

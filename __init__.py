@@ -9,6 +9,7 @@ GULU工具箱（ComfyUI-GULU-Toolbox）
     📂 图像批量顺序导入 —— 逐张读图，每张跑完自动下一张，全部跑完自动结束
     🔁 LoRA 轮转         —— 登记多个 LoRA，一次运行逐个出图
     🏷️ GULU 提示词提取   —— 从单张图片里读出提示词，只有一个字符串输出
+    📝 批量提示词顺序导入 —— 一个文本文件里多条正面提示词，逐条喂给工作流
 
 仅依赖 ComfyUI 自带环境（Pillow / numpy / torch），无需额外安装。
 """
@@ -18,6 +19,7 @@ from .py.node_resize import ImageEdgeResizeCN
 from .py.node_batch_loader import ImageBatchLoopLoader
 from .py.node_lora_cycle import LoRACycleCN
 from .py.node_gulu_extract import GuluPromptExtractCN
+from .py.node_prompt_loader import PromptBatchLoopLoader
 
 NODE_CLASS_MAPPINGS = {
     # 注意：ImagePostExportCN 这个 ID 不要改，已有工作流引用了它
@@ -26,6 +28,7 @@ NODE_CLASS_MAPPINGS = {
     "ImageBatchLoopLoader": ImageBatchLoopLoader,
     "LoRACycleCN": LoRACycleCN,
     "GuluPromptExtractCN": GuluPromptExtractCN,
+    "PromptBatchLoopLoader": PromptBatchLoopLoader,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -34,6 +37,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageBatchLoopLoader": "📂 图像批量顺序导入",
     "LoRACycleCN": "🔁 LoRA 轮转",
     "GuluPromptExtractCN": "🏷️ GULU 提示词提取",
+    "PromptBatchLoopLoader": "📝 批量提示词顺序导入",
 }
 
 WEB_DIRECTORY = "./web"
@@ -44,4 +48,4 @@ __all__ = [
     "WEB_DIRECTORY",
 ]
 
-print("[GULU工具箱] 已加载：图像后处理导出 / 按边压缩 / 图像批量顺序导入 / LoRA 轮转 / GULU 提示词提取")
+print("[GULU工具箱] 已加载：图像后处理导出 / 按边压缩 / 图像批量顺序导入 / LoRA 轮转 / GULU 提示词提取 / 批量提示词顺序导入")
